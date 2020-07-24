@@ -135,4 +135,16 @@ Nginx module 中没有提到相关内容，只能配置使用 nginx 模块的目
 
 加载 pipeline 的逻辑就在 [`loadPipeline`](https://github.com/elastic/beats/blob/bca0adcd4353d2a547e73cb9523a456971d9dc27/filebeat/fileset/pipelines.go#L115-L136) 中，函数首先调用 `makeIngestPipelinePath` 获取到 pipelineID 对应的路径，然后判断如果覆盖参数 `overwrite == true` 则检查 ID 是否存在，存在则直接返回；检查逻辑之后则是调用 `setECSProcessors` 添加 pipeline 然后进行错误检查。
 
-我们需要检查 `setECSProcessors` 中的插入逻辑。
+我们需要检查 [`setECSProcessors`](https://github.com/elastic/beats/blob/bca0adcd4353d2a547e73cb9523a456971d9dc27/filebeat/fileset/pipelines.go#L140-L170) 中的插入逻辑。
+
+20/07/24
+
+上一部分看错了， `setECSProcessors` 是用于更改 Processor 属性为 ECS 的，加载 pipeline 的逻辑是之后调用的 `esClient.LoadJson`.
+
+ECS 的介绍在 [这里](https://www.elastic.co/guide/en/ecs/current/ecs-reference.html)
+
+filebeat 中，加载 pipeline 的方法是使用了其内置的 `esClient.Request` 来向节点发送请求，而我用的 [`go-elasticsearch`](https://github.com/elastic/go-elasticsearch) 并非如此使用，而是先通过 `esapi.IngestPutPipelineRequest` 创建请求，然后通过 `es.Client` 进行发送，处理逻辑上有一定差异。
+
+首先需要实现一个配置文件解析器，参考官方的解析方式，我们不需要读取其字段，只需要判断格式有效即可，实际内容交给 es 去读取。
+
+编写了 pipeline 解析函数和测试用例。
