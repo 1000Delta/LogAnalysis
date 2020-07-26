@@ -1,0 +1,140 @@
+version: "2"
+
+services:
+  ######################## Elasticsearch 集群
+  es01:
+    container_name: la-es01
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    environment:
+      - node.name=la-es01
+      - discovery.seed_hosts=la-es02,la-es03
+    env_file:
+      - ./env/es.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data01:/usr/share/elasticsearch/data
+    ports:
+      - 9200:9200
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+  es02:
+    container_name: la-es02
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    environment:
+      - node.name=la-es02
+      - discovery.seed_hosts=la-es01,la-es03
+    env_file:
+      - ./env/es.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data02:/usr/share/elasticsearch/data
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+  es03:
+    container_name: la-es03
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    environment:
+      - node.name=la-es03
+      - discovery.seed_hosts=la-es02,la-es01
+    env_file:
+      - ./env/es.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - data03:/usr/share/elasticsearch/data
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+  ######################## Kibana
+  kibana:
+    container_name: la-kibana
+    image: docker.elastic.co/kibana/kibana:7.8.0
+    ports:
+      - 5601:5601
+    environment:
+      # SERVER_HOST: 0.0.0.0
+      # SERVER_NAME: localhost
+      SERVER_BASEPATH: /kibana
+      ELASTICSEARCH_HOSTS: http://la-es01:9200
+      I18N_LOCALE: zh-CN # 开启中文界面
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=kibana
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+    depends_on:
+      - es01
+  ######################## Logstash
+  # logstash:
+  #   container_name: la-logstash
+  #   image: docker.elastic.co/logstash/logstash:7.8.0
+  #   volumes:
+  #     - ./logstash/pipeline/:/usr/share/logstash/pipeline/
+  #     - ./logstash/patterns/:/usr/share/logstash/patterns/
+  #     - dataLogstash:/usr/share/logstash/data
+  #   environment:
+  #     XPACK_MONITORING_ELASTICSEARCH_HOSTS: http://la-es01:9200
+  #   networks:
+  #     - LogAnalysis
+  #   command:
+  #     - --config.reload.automatic
+  ######################## filebeat
+  filebeat:
+    container_name: la-filebeat
+    image: docker.elastic.co/beats/filebeat:7.8.0
+    user: root
+    volumes:
+      - ./filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /1000delta/logs:/logs/nginx:ro
+    environment:
+      MONITORING_ELASTICSEARCH_HOSTS: http://la-es01:9200
+      ELASTICSEARCH_HOSTS: la-es01:9200
+      # LOGSTASH_HOSTS: la-logstash:5044
+      KIBANA_HOST: la-kibana:5601
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=beats
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+    depends_on:
+      - es01
+      - kibana
+      # - logstash
+
+volumes:
+  data01:
+    driver: local
+  data02:
+    driver: local
+  data03:
+    driver: local
+  dataLogstash:
+    driver: local
+
+networks:
+  LogAnalysis:
+    driver: bridge

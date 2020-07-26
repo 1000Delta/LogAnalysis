@@ -1,0 +1,50 @@
+filebeat.config:
+  modules:
+    path: ${path.config}/modules.d/*.yml
+    reload.enabled: true
+
+filebeat.autodiscover:
+  providers:
+    - type: docker
+      hints.enabled: true
+
+processors:
+  - add_cloud_metadata: ~
+
+# filebeat.inputs:
+#   - type: log
+#     paths:
+#       - /logs/nginx/wsl.dev/access.log
+#       # - /logs/nginx/wsl.dev/error.log
+#     fields:
+#       website: wsl.dev
+#       event.module: nginx
+#     fields_under_root: true
+#     pipeline: filebeat-7.8.0-nginx-access-pipeline
+#   - type: log
+#     paths:
+#       # - /logs/nginx/wsl.dev/access.log
+#       - /logs/nginx/wsl.dev/error.log
+#     fields:
+#       website: wsl.dev
+#       event.module: nginx
+#     fields_under_root: true
+#     pipeline: filebeat-7.8.0-nginx-error-pipeline
+
+output.elasticsearch:
+  hosts: "${ELASTICSEARCH_HOSTS:elasticsearch:9200}"
+  username: "${ELASTICSEARCH_USERNAME:}"
+  password: "${ELASTICSEARCH_PASSWORD:}"
+
+# output.logstash:
+#   hosts: "${LOGSTASH_HOSTS:logstash:5044}"
+
+setup.kibana:
+  host: "${KIBANA_HOST:kibana:5601}"
+#  path: /kibana
+
+monitoring:
+  enabled: true
+  # cluster_uuid: PRODUCTION_ES_CLUSTER_UUID
+  elasticsearch:
+    hosts: "${MONITORING_ELASTICSEARCH_HOSTS:elasticsearch:9200}"
