@@ -148,3 +148,17 @@ filebeat 中，加载 pipeline 的方法是使用了其内置的 `esClient.Reque
 首先需要实现一个配置文件解析器，参考官方的解析方式，我们不需要读取其字段，只需要判断格式有效即可，实际内容交给 es 去读取。
 
 编写了 pipeline 解析函数和测试用例。
+
+20/07/25
+
+完成 pipelineloader 的基本逻辑和测试用例，直接编译运行即可加载 pipeline 到 `127.0.0.1:9200` 上运行的 ES
+
+20/07/26
+
+> 题外话：阅读了一下 filebeat 的源码，其大量使用了工厂模式，之后可以去看一遍源码学习一下 filebeat 的架构
+
+filebeat 对配置文件要求所有者为 filebeat 的用户并且仅用户可写，而 filebeat 是使用容器的 root 用户运行的，因此在外部修改需要使用 sudo 或者 root 用户修改，并且权限问题导致不能自动加载，需要手动重启非常不方便。
+
+目前的解决方案是通过 Makefile 定制命令 `edit` 和 `reconfigure` 来实现修改文件权限和重新加载。 // TODO 优化 filebeat 配置加载
+
+针对 pipelineloader 的编译和执行制定了 make 命令，之后可以尝试优化 // TODO 优化 make 命令
