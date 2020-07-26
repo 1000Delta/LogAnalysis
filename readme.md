@@ -162,3 +162,5 @@ filebeat 对配置文件要求所有者为 filebeat 的用户并且仅用户可�
 目前的解决方案是通过 Makefile 定制命令 `edit` 和 `reconfigure` 来实现修改文件权限和重新加载。 // TODO 优化 filebeat 配置加载
 
 针对 pipelineloader 的编译和执行制定了 make 命令，之后可以尝试优化 // TODO 优化 make 命令
+
+> Makefile 中，对于需要变更工作目录的命令，比如 `go build`，需要使用 `cd target && go build` 来执行命令，因为每条命令在 make 中都是开启一个 “sub shell”，上一条命令的 `cd` 对于下一条命令是无效的
