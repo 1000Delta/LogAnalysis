@@ -4,8 +4,10 @@ processors:
       field: message
       patterns:
         - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
-          (\*%{NUMBER:nginx.error.connection_id:long} )?%{GREEDYMULTILINE:message}'
+          (\*%{NUMBER:nginx.error.connection_id:long} )?(?<message>%{NGINXERROR_MESSAGE}|%{GREEDYMULTILINE})(?:, client: (?<nginx.error.client>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:nginx.error.server}?)(?:, request: %{QS:nginx.error.request})?(?:, upstream: (?<nginx.error.upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:nginx.error.host})?(?:, referrer: \"%{URI:nginx.error.referrer}\")?'
       pattern_definitions:
+        NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
+        NGINXERROR_MESSAGE: '(?:%{GREEDYDATA})?\(%{NUMBER:nginx.error.code}: %{GREEDYDATA:nginx.error.info}\)(?:%{GREEDYDATA})?'
         GREEDYMULTILINE: |-
           (.|
           |	)*
@@ -45,6 +47,15 @@ processors:
   - append:
       field: event.type
       value: error
+  - grok:
+      field: log.file.path
+      patterns:
+        - "/(%{DATA}/)*%{DATA:destination.domain}/error.log"
+      if: "ctx?.destination?.domain == null"
+  - set:
+      field: event.module
+      value: nginx
+      if: ctx?.event?.module == null
 on_failure:
   - set:
       field: error.message

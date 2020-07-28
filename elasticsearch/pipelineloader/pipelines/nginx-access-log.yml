@@ -101,10 +101,11 @@ processors:
       target_field: "@timestamp"
       formats:
         - dd/MMM/yyyy:H:m:s Z
+        # - dd/MMM/yyyy:HH:mm:ss Z
       on_failure:
         - append:
             field: error.message
-            value: "{{ _ingest.on_failure_message }}"
+            value: "date parse error: {{ _ingest.on_failure_message }}"
   - remove:
       field: nginx.access.time
   - user_agent:
@@ -159,7 +160,20 @@ processors:
       field: related.user
       value: "{{user.name}}"
       if: "ctx?.user?.name != null"
+  - grok:
+      field: log.file.path
+      patterns:
+        - "/(%{DATA}/)*%{DATA:destination.domain}/access.log"
+      if: "ctx?.destination?.domain == null"
+      # on_failure:
+      #   - set:
+      #     field: error.message
+      #     value: "grok log.file.path on failure: {{ _ingest.on_failure_message }}"
+  - set:
+      field: event.module
+      value: nginx
+      if: ctx?.event?.module == null
 on_failure:
   - set:
       field: error.message
-      value: "{{ _ingest.on_failure_message }}"
+      value: "pipeline on failure: {{ _ingest.on_failure_message }}"
