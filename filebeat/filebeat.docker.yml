@@ -11,25 +11,25 @@ filebeat.autodiscover:
 processors:
   - add_cloud_metadata: ~
 
-# filebeat.inputs:
-#   - type: log
-#     paths:
-#       - /logs/nginx/wsl.dev/access.log
-#       # - /logs/nginx/wsl.dev/error.log
-#     fields:
-#       website: wsl.dev
-#       event.module: nginx
-#     fields_under_root: true
-#     pipeline: filebeat-7.8.0-nginx-access-pipeline
-#   - type: log
-#     paths:
-#       # - /logs/nginx/wsl.dev/access.log
-#       - /logs/nginx/wsl.dev/error.log
-#     fields:
-#       website: wsl.dev
-#       event.module: nginx
-#     fields_under_root: true
-#     pipeline: filebeat-7.8.0-nginx-error-pipeline
+filebeat.inputs:
+  - type: log
+    paths:
+      - /logs/nginx/*/access.log
+    # fields:
+    #   website: wsl.dev
+    #   event.module: nginx
+    # fields_under_root: true
+    pipeline: nginx-access-log
+    index: nginx-access-%{+yyyy.MM.dd}
+  - type: log
+    paths:
+      - /logs/nginx/*/error.log
+    #     fields:
+    #       website: wsl.dev
+    #       event.module: nginx
+    #     fields_under_root: true
+    pipeline: nginx-error-log
+    index: nginx-error-%{+yyyy.MM.dd}
 
 output.elasticsearch:
   hosts: "${ELASTICSEARCH_HOSTS:elasticsearch:9200}"
