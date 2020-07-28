@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"io/ioutil"
 	"log"
 	"strings"
 
@@ -29,8 +30,12 @@ func main() {
 			log.Fatalf("request es client error: %v", err.Error())
 		}
 		defer rsp.Body.Close()
+		msg, err := ioutil.ReadAll(rsp.Body)
+		if err != nil {
+			log.Printf("read es response body error: %v", err.Error())
+		}
 		if rsp.IsError() {
-			log.Printf("request es pipeline error: %v", rsp.Body)
+			log.Printf("request ingestgetpipeline error: %v", string(msg))
 		}
 	}
 }
