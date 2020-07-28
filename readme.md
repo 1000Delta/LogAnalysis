@@ -19,6 +19,7 @@
     - [ES pipeline 加载器](#es-pipeline-加载器)
     - [添加 pipeline processor 自动添加域名字段](#添加-pipeline-processor-自动添加域名字段)
       - [pipeline 解析日志报错](#pipeline-解析日志报错)
+    - [多行日志处理问题](#多行日志处理问题)
 
 ## 技术架构
 
@@ -185,21 +186,21 @@ Elastic search 官方文档关于 processor 编写
 
 通过使用 grok 和正则可以快速的提取出站点域名信息：
 
- ```yaml
-  - grok:
-      field: log.file.path
-      patterns:
-        - "/(%{DATA}/)*%{DATA:destination.domain}/access.log"
-      if: "ctx.destination.domain == null"
- ```
+```yaml
+- grok:
+    field: log.file.path
+    patterns:
+      - "/(%{DATA}/)*%{DATA:destination.domain}/access.log"
+    if: "ctx.destination.domain == null"
+```
 
- 然后模拟 filebeat Nginx module 的标识，让数据条目在 Kibana 中可以看作 Nginx module 输出的:
+然后模拟 filebeat Nginx module 的标识，让数据条目在 Kibana 中可以看作 Nginx module 输出的:
 
- ```yaml
-  - set:
-      field: event.module
-      value: nginx
-      if: ctx.event.module == null
+```yaml
+- set:
+    field: event.module
+    value: nginx
+    if: ctx.event.module == null
 ```
 
 运行 ES 集群之后，通过 pipelineloader 将 pipeline 加载到 ingest node 中，输出的数据已经符合了我们的要求。
@@ -235,32 +236,32 @@ NGINX_ERRORLOG %{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NU
 由于在生产环境中，Nginx 可能对接到 `php-fpm` 等 FastCGI 协议的引擎，此时错误输出可能是引擎内部错误或者代码运行时错误，输出内容就不会遵循 Nginx 内部错误的格式，因此我们需要对可能的多行内容进行匹配，此时可以使用已经定义在配置中的 `GREEDYMULTILINE` 来指定，我们参考原本实现，最大限度复用原有配置，原 grok 如下：
 
 ```yaml
-  - grok:
-      field: message
-      patterns:
-        - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
-          (\*%{NUMBER:nginx.error.connection_id:long} )?%{GREEDYMULTILINE:message}'
-      pattern_definitions:
-        GREEDYMULTILINE: |-
-          (.|
-          |	)*
-      ignore_missing: true
+- grok:
+    field: message
+    patterns:
+      - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
+        (\*%{NUMBER:nginx.error.connection_id:long} )?%{GREEDYMULTILINE:message}'
+    pattern_definitions:
+      GREEDYMULTILINE: |-
+        (.|
+        |	)*
+    ignore_missing: true
 ```
 
 最终修改配置如下：
 
 ```yaml
-  - grok:
-      field: message
-      patterns:
-        - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:(\*%{NUMBER:nginx.error.connection_id:long} )?(?<nginx.error.message>%{NGINXERROR_MESSAGE}|%{GREEDYDATA})(?:, client: (?<remote_addr>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:server}?)(?:, request: %{QS:request})?(?:, upstream: (?<upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:request_host})?(?:, referrer: \"%{URI:referrer}\")?'
-      pattern_definitions:
-        NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
-        NGINXERROR_MESSAGE: '(?:%{GREEDYDATA})?\(%{NUMBER:nginx.error.code}: %{GREEDYDATA:nginx.error.info}\)(?:%{GREEDYDATA})?'
-        GREEDYMULTILINE: |-
-          (.|
-          |	)*
-      ignore_missing: true
+- grok:
+    field: message
+    patterns:
+      - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:(\*%{NUMBER:nginx.error.connection_id:long} )?(?<nginx.error.message>%{NGINXERROR_MESSAGE}|%{GREEDYDATA})(?:, client: (?<remote_addr>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:server}?)(?:, request: %{QS:request})?(?:, upstream: (?<upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:request_host})?(?:, referrer: \"%{URI:referrer}\")?'
+    pattern_definitions:
+      NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
+      NGINXERROR_MESSAGE: '(?:%{GREEDYDATA})?\(%{NUMBER:nginx.error.code}: %{GREEDYDATA:nginx.error.info}\)(?:%{GREEDYDATA})?'
+      GREEDYMULTILINE: |-
+        (.|
+        |	)*
+    ignore_missing: true
 ```
 
 实际上就是对最后一部分 `%{GREEDYMULTILINE:message}` 做了扩展，将报错信息进行了详细划分。
@@ -273,4 +274,18 @@ NGINX_ERRORLOG %{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NU
 
 在检查日志解析的时候发现，对于 `access.log` 的解析经常出现报错信息：`[script] Too many dynamic script compilations within, max: [75/5m]; please use indexed, or scripts with parameters instead; this limit can be changed by the [script.max_compilations_rate] setting`，通过检查代码，发现是 processor 中 `if` 条件的表达式有问题：`"ctx?.destination?.domain? == null"`，修改成 `"ctx?.destination?.domain == null"` 即可，我对这里 `?` 的理解是先检查前置值是否存在，而最终字段不应该加上 `?`。
 
-查询文档表明，ES的 Painless 语法提供了 `?` 来保证 `null safe`（空值安全），否则会抛出 Java 经典的 NullPointerException 更多详细信息可以查阅文档：[Handling Nested Fields in Conditionals](https://www.elastic.co/guide/en/elasticsearch/reference/current/ingest-conditional-nullcheck.html#ingest-conditional-nullcheck)。
+查询文档表明，ES 的 Painless 语法提供了 `?` 来保证 `null safe`（空值安全），否则会抛出 Java 经典的 NullPointerException 更多详细信息可以查阅文档：[Handling Nested Fields in Conditionals](https://www.elastic.co/guide/en/elasticsearch/reference/current/ingest-conditional-nullcheck.html#ingest-conditional-nullcheck)。
+
+### 多行日志处理问题
+
+多行日志，比如 `error.log` 中 php-fpm 输出的 PHP track，此时如果使用默认的 Log input，那么对于多行信息就会被当作多条信息，导致 pipeline 无法解析。通过设置 `multiline` 参数可以设置用于匹配多行数据起始的模式等参数，文档：[Manage multiline messages](https://www.elastic.co/guide/en/beats/filebeat/7.8/multiline-examples.html)
+
+可以使用正则来编写模式，然后指定匹配与否和匹配位置，对于错误日志，起始为时间戳，格式为 `yyyy/MM/dd hh:mm:ss`，那么我们用以下设置：
+
+```yaml
+multiline.pattern: "^\d{4}\/\d{2}\/\d{2}"
+multiline.negate: true
+multiline.match: after
+```
+
+以上表示将“（以模式时间戳作为一行起始的数据）和（之后的行）”作为一条多行数据来处理。
