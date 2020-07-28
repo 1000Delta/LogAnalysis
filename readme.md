@@ -6,6 +6,7 @@
   - [技术架构](#技术架构)
     - [日志收集](#日志收集)
   - [Elastic 安装教程](#elastic-安装教程)
+  - [依赖环境](#依赖环境)
   - [系统配置](#系统配置)
     - [禁用交换空间](#禁用交换空间)
     - [增加虚拟内存区域数量](#增加虚拟内存区域数量)
@@ -35,6 +36,14 @@ filebeat 插件进行日志的收集，
 - [Logstash 配置](https://www.elastic.co/guide/en/logstash/current/docker-config.html)
 - [通过 Docker 安装 Elasticsearch](https://www.elastic.co/guide/en/elasticsearch/reference/current/docker.html)
 - [通过 Docker 安装 Kibana](https://www.elastic.co/guide/en/kibana/current/docker.html)
+
+## 依赖环境
+
+go >= 1.11
+
+Docker
+
+docker-compose
 
 ## 系统配置
 
