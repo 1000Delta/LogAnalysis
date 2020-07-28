@@ -17,6 +17,8 @@
       - [方案 1](#方案-1)
       - [方案 2](#方案-2)
     - [ES pipeline 加载器](#es-pipeline-加载器)
+    - [添加 pipeline processor 自动添加域名字段](#添加-pipeline-processor-自动添加域名字段)
+      - [pipeline 解析日志报错](#pipeline-解析日志报错)
 
 ## 技术架构
 
@@ -108,7 +110,7 @@ Nginx module 中没有提到相关内容，只能配置使用 nginx 模块的目
 
 #### 方案 2
 
-需要配置 Nginx 的 `log_format`，官方文档：[Nginx log_format](http://nginx.org/en/docs/http/ngx_http_log_module.html#log_format)
+需要配置 Nginx 的 `log_format`，Nginx 官方文档：[Nginx log_format](http://nginx.org/en/docs/http/ngx_http_log_module.html#log_format)
 
 存在的问题就是无法对旧日志进行分析，因为旧格式不包含站点字段。
 
@@ -164,3 +166,111 @@ filebeat 对配置文件要求所有者为 filebeat 的用户并且仅用户可�
 针对 pipelineloader 的编译和执行制定了 make 命令，之后可以尝试优化 // TODO 优化 make 命令
 
 > Makefile 中，对于需要变更工作目录的命令，比如 `go build`，需要使用 `cd target && go build` 来执行命令，因为每条命令在 make 中都是开启一个 “sub shell”，上一条命令的 `cd` 对于下一条命令是无效的
+
+20/07/27
+
+目前从 filebeat 项目中下载了 Nginx module 的 pipeline 配置，然后需要根据生产环境的日志来做定制，添加 processor 来区分不同站点。
+
+生产环境中，日志文件名相同而日志内容格式相同，没有区分不同的站点，对每个站点做配置又过于麻烦，通过 nginx module 获取到的日志中，我们可以看到一条字段：
+
+![image-20200727164843328](readme.assets/image-20200727164843328.png)
+
+`log.file.path` 这个字段包含了我们日志的目录规则：日志文件的上一级目录是站点域名，此时我们就可以添加一个 processor 来分割路径获取到站点域名，也就是我们 pipelineloader 发挥作用的时候了。
+
+### 添加 pipeline processor 自动添加域名字段
+
+Elastic search 官方文档关于 processor 编写
+
+我们可以模仿 nginx module 中添加域名的字段 `destination.domain` 来添加字段。
+
+通过使用 grok 和正则可以快速的提取出站点域名信息：
+
+ ```yaml
+  - grok:
+      field: log.file.path
+      patterns:
+        - "/(%{DATA}/)*%{DATA:destination.domain}/access.log"
+      if: "ctx.destination.domain == null"
+ ```
+
+ 然后模拟 filebeat Nginx module 的标识，让数据条目在 Kibana 中可以看作 Nginx module 输出的:
+
+ ```yaml
+  - set:
+      field: event.module
+      value: nginx
+      if: ctx.event.module == null
+```
+
+运行 ES 集群之后，通过 pipelineloader 将 pipeline 加载到 ingest node 中，输出的数据已经符合了我们的要求。
+
+上述 processor 是通用于 `access.log` 和 `error.log`，对于 `error.log`，Nginx module 中定义的 grok processor 只划分了基本的数据字段，对于错误的详细信息只存储在 `message` 中，对于错误定位和错误类型没有做划分，因此对于统计错误不太方便，我在 Logstash 定制 Grok filter 时，对于错误信息做了一个简单的分割器，可以对常见的错误定位和错误类型进行分割，便于统计错误类型。
+
+在 Grok 文件中的格式：
+
+```grok
+NGINXERROR_DATE %{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}
+NGINXERROR_MESSAGE (?:%{GREEDYDATA:error.detail_before})?\(%{NUMBER:error.code}: %{GREEDYDATA:error_info}\)(?:%{GREEDYDATA:error.detail_end})?
+
+# Error logs
+NGINX_ERRORLOG %{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NUMBER}: (?<error_message>%{NGINXERROR_MESSAGE}|%{GREEDYDATA})(?:, client: (?<remote_addr>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:server}?)(?:, request: %{QS:request})?(?:, upstream: (?<upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:request_host})?(?:, referrer: \"%{URI:referrer}\")?
+```
+
+此处匹配逻辑借用了 Grok 默认模式中的 `httpd` 格式，对于错误信息和后续的 IP 和域名都做了划分，重点在于自定义的字段 `NGINXERROR_MESSAGE` 中，使用正则分别捕获错误定位和错误类型，Nginx 错误日志的错误类型有固定的格式为 `({code}: {info})`，而对于不符合内部错误格式的错误使用 `GREEDYDATA` 匹配即可。
+
+> Elasticsearch 内置的 grok 模式可以参考 [`grok patterns`](https://github.com/elastic/elasticsearch/blob/5a5e11cf7d151636932a793ddbcc033675bd05ee/libs/grok/src/main/resources/patterns/grok-patterns)，对常用 patterns 做了定义。
+
+修改为 pipeline 格式如下：
+
+```yaml
+  - grok:
+      field: message
+      patterns:
+        - "%{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NUMBER}: (?<error_message>%{NGINXERROR_MESSAGE}|%{GREEDYDATA})(?:, client: (?<remote_addr>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:server}?)(?:, request: %{QS:request})?(?:, upstream: (?<upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:request_host})?(?:, referrer: \"%{URI:referrer}\")?"
+      pattern_definitions:
+        NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
+        NGINXERROR_MESSAGE: "(?:%{GREEDYDATA:error.detail_before})?\(%{NUMBER:error.code}: %{GREEDYDATA:error_info}\)(?:%{GREEDYDATA:error.detail_end})?"
+```
+
+由于在生产环境中，Nginx 可能对接到 `php-fpm` 等 FastCGI 协议的引擎，此时错误输出可能是引擎内部错误或者代码运行时错误，输出内容就不会遵循 Nginx 内部错误的格式，因此我们需要对可能的多行内容进行匹配，此时可以使用已经定义在配置中的 `GREEDYMULTILINE` 来指定，我们参考原本实现，最大限度复用原有配置，原 grok 如下：
+
+```yaml
+  - grok:
+      field: message
+      patterns:
+        - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
+          (\*%{NUMBER:nginx.error.connection_id:long} )?%{GREEDYMULTILINE:message}'
+      pattern_definitions:
+        GREEDYMULTILINE: |-
+          (.|
+          |	)*
+      ignore_missing: true
+```
+
+最终修改配置如下：
+
+```yaml
+  - grok:
+      field: message
+      patterns:
+        - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:(\*%{NUMBER:nginx.error.connection_id:long} )?(?<nginx.error.message>%{NGINXERROR_MESSAGE}|%{GREEDYDATA})(?:, client: (?<remote_addr>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:server}?)(?:, request: %{QS:request})?(?:, upstream: (?<upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:request_host})?(?:, referrer: \"%{URI:referrer}\")?'
+      pattern_definitions:
+        NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
+        NGINXERROR_MESSAGE: '(?:%{GREEDYDATA})?\(%{NUMBER:nginx.error.code}: %{GREEDYDATA:nginx.error.info}\)(?:%{GREEDYDATA})?'
+        GREEDYMULTILINE: |-
+          (.|
+          |	)*
+      ignore_missing: true
+```
+
+实际上就是对最后一部分 `%{GREEDYMULTILINE:message}` 做了扩展，将报错信息进行了详细划分。
+
+20/07/28
+
+进行测试发现报错：`Provided Grok expressions do not match field value: [/logs/nginx/wsl.dev/error.log]`，说明编写的模式有问题
+
+#### pipeline 解析日志报错
+
+在检查日志解析的时候发现，对于 `access.log` 的解析经常出现报错信息：`[script] Too many dynamic script compilations within, max: [75/5m]; please use indexed, or scripts with parameters instead; this limit can be changed by the [script.max_compilations_rate] setting`，通过检查代码，发现是 processor 中 `if` 条件的表达式有问题：`"ctx?.destination?.domain? == null"`，修改成 `"ctx?.destination?.domain == null"` 即可，我对这里 `?` 的理解是先检查前置值是否存在，而最终字段不应该加上 `?`。
+
+查询文档表明，ES的 Painless 语法提供了 `?` 来保证 `null safe`（空值安全），否则会抛出 Java 经典的 NullPointerException 更多详细信息可以查阅文档：[Handling Nested Fields in Conditionals](https://www.elastic.co/guide/en/elasticsearch/reference/current/ingest-conditional-nullcheck.html#ingest-conditional-nullcheck)。
