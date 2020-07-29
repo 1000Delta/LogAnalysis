@@ -4,7 +4,7 @@ processors:
       field: message
       patterns:
         - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
-          (\*%{NUMBER:nginx.error.connection_id:long} )?(?<message>%{NGINXERROR_MESSAGE}|%{GREEDYMULTILINE})(?:, client: (?<nginx.error.client>%{IP}|%{HOSTNAME}))(?:, server: %{IPORHOST:nginx.error.server}?)(?:, request: %{QS:nginx.error.request})?(?:, upstream: (?<nginx.error.upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:nginx.error.host})?(?:, referrer: \"%{URI:nginx.error.referrer}\")?'
+          (\*%{NUMBER:nginx.error.connection_id:long} )?(?<message>%{NGINXERROR_MESSAGE}|%{GREEDYMULTILINE})(?:, client: (?<nginx.error.client>%{IP}|%{HOSTNAME}))?(?:, server: %{IPORHOST:nginx.error.server}?)?(?:, request: %{QS:nginx.error.request})?(?:, upstream: (?<nginx.error.upstream>\"%{URI}\"|%{QS}))?(?:, host: %{QS:nginx.error.host})?(?:, referrer: \"%{URI:nginx.error.referrer}\")?'
       pattern_definitions:
         NGINXERROR_DATE: "%{YEAR}/%{MONTHNUM}/%{MONTHDAY} %{TIME}"
         NGINXERROR_MESSAGE: '(?:%{GREEDYDATA})?\(%{NUMBER:nginx.error.code}: %{GREEDYDATA:nginx.error.info}\)(?:%{GREEDYDATA})?'
