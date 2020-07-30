@@ -19,13 +19,27 @@ func NewESCluster() *ESCluster {
 	}
 }
 
+// MasterNodes 获取 master 节点信息字符串
+func (nc *ESCluster) MasterNodes() string {
+	s := ""
+	for _, n := range nc.Nodes {
+		if n.IsMaster {
+			s += n.Name + ","
+		}
+	}
+	if s == "" {
+		return s
+	}
+	return s[:len(s)-1]
+}
+
 // Hosts 返回集群中节点列表的字符串，参数为忽略节点的map
 // ignore: 忽略节点列表
 // 	example return: node1,node2,node3,node5
-func (n *ESCluster) Hosts(ignore string) string {
+func (nc *ESCluster) Hosts(ignore string) string {
 	seeds := ""
 	igNodes := strings.Split(ignore, ",")
-	for _, node := range n.Nodes {
+	for _, node := range nc.Nodes {
 		exist := false
 		for _, ig := range igNodes {
 			if ig == node.Name {
@@ -38,6 +52,9 @@ func (n *ESCluster) Hosts(ignore string) string {
 		}
 		seeds += fmt.Sprintf("%s,", node.Name)
 	}
+	if seeds == "" {
+		return seeds
+	}
 	return seeds[:len(seeds)-1]
 }
 
@@ -47,4 +64,6 @@ type ESNode struct {
 	IsMaster bool
 	// HeapSize 描述集群中节点 Java 堆大小，MiB
 	HeapSize int
+	// PortMap 表示端口映射，"19200:9200" -> 19200 => 9200
+	PortMap map[int]int
 }

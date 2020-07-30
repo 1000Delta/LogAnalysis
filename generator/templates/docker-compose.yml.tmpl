@@ -1,0 +1,112 @@
+version: "2"
+
+services:
+  ######################## Elasticsearch 集群
+  {{ $cluster := .ESCluster }}
+  {{ range .ESCluster.Nodes }}
+  {{ .Name }}:
+    container_name: {{ .Name }}
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    environment:
+      - node.name={{ .Name }}
+      {{ with $cluster.Hosts .Name }}
+      - discovery.seed_hosts={{ . }}
+      {{ else }}
+      - discovery.type=single-node
+      {{ end }}
+      - ES_JAVA_OPTS=-Xms{{ .HeapSize }}m -Xmx{{ .HeapSize }}m
+    env_file:
+      - ./env/es.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - {{ .Volume }}:/usr/share/elasticsearch/data
+    {{ with .PortMap }}
+    ports:
+      {{ range $port, $portC := . }}
+      - {{ $port }}:{{ $portC }}
+      {{end}}
+    {{ end }}
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+  {{ end }}
+  ######################## Kibana
+  kibana:
+    container_name: la-kibana
+    image: docker.elastic.co/kibana/kibana:7.8.0
+    ports:
+      - 5601:5601
+    environment:
+      # SERVER_HOST: 0.0.0.0
+      # SERVER_NAME: localhost
+      SERVER_BASEPATH: /kibana
+      ELASTICSEARCH_HOSTS: http://la-es01:9200
+      I18N_LOCALE: zh-CN # 开启中文界面
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=kibana
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+    depends_on:
+      - es01
+  ######################## Logstash
+  # logstash:
+  #   container_name: la-logstash
+  #   image: docker.elastic.co/logstash/logstash:7.8.0
+  #   volumes:
+  #     - ./logstash/pipeline/:/usr/share/logstash/pipeline/
+  #     - ./logstash/patterns/:/usr/share/logstash/patterns/
+  #     - dataLogstash:/usr/share/logstash/data
+  #   environment:
+  #     XPACK_MONITORING_ELASTICSEARCH_HOSTS: http://la-es01:9200
+  #   networks:
+  #     - LogAnalysis
+  #   command:
+  #     - --config.reload.automatic
+  ######################## filebeat
+  filebeat:
+    container_name: la-filebeat
+    image: docker.elastic.co/beats/filebeat:7.8.0
+    user: root
+    volumes:
+      - ./filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /1000delta/logs:/logs/nginx:ro
+    environment:
+      MONITORING_ELASTICSEARCH_HOSTS: http://la-es01:9200
+      ELASTICSEARCH_HOSTS: "[la-es01:9200, la-es02:9200, la-es03:9200]"
+      # LOGSTASH_HOSTS: la-logstash:5044
+      KIBANA_HOST: la-kibana:5601
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=beats
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+    depends_on:
+      - es01
+      - kibana
+      # - logstash
+
+volumes:
+  data01:
+    driver: local
+  data02:
+    driver: local
+  data03:
+    driver: local
+  dataLogstash:
+    driver: local
+
+networks:
+  LogAnalysis:
+    driver: bridge
