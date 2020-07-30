@@ -1,6 +1,9 @@
 package models
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ESCluster 定义 ES 集群信息
 type ESCluster struct {
@@ -8,7 +11,7 @@ type ESCluster struct {
 	Nodes []*ESNode
 }
 
-// NewESCluster
+// NewESCluster 创建集群对象
 func NewESCluster() *ESCluster {
 	return &ESCluster{
 		Name:  "",
@@ -16,14 +19,24 @@ func NewESCluster() *ESCluster {
 	}
 }
 
-// SeedHosts 返回集群中节点需要发现的节点
-func (n *ESCluster) SeedHosts(node *ESNode) string {
+// Hosts 返回集群中节点列表的字符串，参数为忽略节点的map
+// ignore: 忽略节点列表
+// 	example return: node1,node2,node3,node5
+func (n *ESCluster) Hosts(ignore string) string {
 	seeds := ""
-	for _, n := range n.Nodes {
-		if n == node {
+	igNodes := strings.Split(ignore, ",")
+	for _, node := range n.Nodes {
+		exist := false
+		for _, ig := range igNodes {
+			if ig == node.Name {
+				exist = true
+				break
+			}
+		}
+		if exist {
 			continue
 		}
-		seeds += fmt.Sprintf("%s,", n.Name)
+		seeds += fmt.Sprintf("%s,", node.Name)
 	}
 	return seeds[:len(seeds)-1]
 }
