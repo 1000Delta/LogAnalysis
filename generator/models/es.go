@@ -5,16 +5,23 @@ import (
 	"strings"
 )
 
+const (
+	// ESDataPath 是 ES 数据路径
+	ESDataPath = "/usr/share/elasticsearch/data"
+)
+
 // ESCluster 定义 ES 集群信息
 type ESCluster struct {
-	Name  string
+	Container
 	Nodes []*ESNode
 }
 
 // NewESCluster 创建集群对象
-func NewESCluster() *ESCluster {
+func NewESCluster(name string) *ESCluster {
 	return &ESCluster{
-		Name:  "",
+		Container: Container{
+			Name: name,
+		},
 		Nodes: []*ESNode{},
 	}
 }
@@ -60,11 +67,23 @@ func (nc *ESCluster) GetHosts(ignore string) string {
 
 // ESNode 描述 ES 节点信息
 type ESNode struct {
-	Name     string
+	Container
 	IsMaster bool
 	// HeapSize 描述集群中节点 Java 堆大小，MiB
 	HeapSize int
-	// PortMap 表示端口映射，"19200:9200" -> 19200 => 9200
-	PortMap map[int]int
-	Volume string
+}
+
+// NewESNode 新建一个节点信息对象
+func NewESNode(name string, ports map[int]int, heapSize int, isMaster bool, dataVolume string) *ESNode {
+	return &ESNode{
+		Container: Container{
+			Name:  name,
+			Ports: ports,
+			Volumes: map[*Volume]string{
+				NewVolume(dataVolume, VolumeDriverLocal): ESDataPath,
+			},
+		},
+		HeapSize: heapSize,
+		IsMaster: isMaster,
+	}
 }
