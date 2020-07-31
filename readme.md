@@ -23,6 +23,8 @@
     - [多行日志处理问题](#多行日志处理问题)
     - [部署问题](#部署问题)
     - [配置生成器](#配置生成器)
+      - [模板空白符处理](#模板空白符处理)
+      - [模板分文件处理](#模板分文件处理)
 
 ## 技术架构
 
@@ -253,9 +255,7 @@ NGINX_ERRORLOG %{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NU
       - '%{DATA:nginx.error.time} \[%{DATA:log.level}\] %{NUMBER:process.pid:long}#%{NUMBER:process.thread.id:long}:
         (\*%{NUMBER:nginx.error.connection_id:long} )?%{GREEDYMULTILINE:message}'
     pattern_definitions:
-      GREEDYMULTILINE: |-
-        (.|
-        |	)*
+      GREEDYMULTILINE: (.|\n|\t)*
     ignore_missing: true
 ```
 
@@ -319,4 +319,33 @@ go template 文档：[Package template](https://golang.org/pkg/text/template/)
 
 > go template 中有两个很相近的 Action，`with` 和 `if`，它们都是条件结构，区别在于，`with` 会将内部的 `.` 设置为 pipeline 的值，而 `if` 不会影响 `.` 的值
 
+20/07/31
 
+在模板中，占有一行的**无输出**插值表达式会导致出现空行，通过对分隔符加上 `-` 裁剪符可以除去空白符，比如 `{{-` 除去左侧空白符 `-}}` 除去右侧空白符，文档：[Text and spaces](https://golang.org/pkg/text/template/#hdr-Text_and_spaces).
+
+#### 模板空白符处理
+
+yaml 格式配置中，缩进是一个很重要的点，因此对于空白符的删除也要注意：
+
+- 对于表达式和下一行文本在同一缩进的格式，使用右侧的裁剪符，相当于将表达式放在**下一个非空白符**之前。
+
+- 对于表达式下一行文本不在同一缩进的格式，使用左侧裁剪符，相当于把表达式放在**上一个非空白符**末尾。
+
+```template
+services:
+  {{ range .Nodes -}}
+  {{ .Name }}:
+    container_name: {{ .Name }}
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+      - LogAnalysis
+  {{- end }}
+networks:
+```
+
+此处 `{{ range .Nodes -}}` 使用右裁剪模式，相当于把 `{{ .Name }}` 提到了它这一行的开头，而因为 `range` 表达式缩进正确，因此输出也会正确。
+
+对于 `{{- end }}` 表达式使用的是左裁剪，这样相当于它在上一行 `LogAnalysis` 的末尾，如果使用右裁剪的话，相当于把下一行的 `networks` 提到了和 `end` 一样的缩进，此时格式就错误了。
+
+#### 模板分文件处理
+
+对于不同部分的模板可以分开做处理，可以优化模板的格式
