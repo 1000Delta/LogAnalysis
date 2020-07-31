@@ -19,8 +19,8 @@ func NewESCluster() *ESCluster {
 	}
 }
 
-// MasterNodes 获取 master 节点信息字符串
-func (nc *ESCluster) MasterNodes() string {
+// GetMasterNodes 获取 master 节点信息字符串
+func (nc *ESCluster) GetMasterNodes() string {
 	s := ""
 	for _, n := range nc.Nodes {
 		if n.IsMaster {
@@ -33,10 +33,10 @@ func (nc *ESCluster) MasterNodes() string {
 	return s[:len(s)-1]
 }
 
-// Hosts 返回集群中节点列表的字符串，参数为忽略节点的map
+// GetHosts 返回集群中节点列表的字符串，参数为忽略节点的map
 // ignore: 忽略节点列表
 // 	example return: node1,node2,node3,node5
-func (nc *ESCluster) Hosts(ignore string) string {
+func (nc *ESCluster) GetHosts(ignore string) string {
 	seeds := ""
 	igNodes := strings.Split(ignore, ",")
 	for _, node := range nc.Nodes {
