@@ -18,9 +18,13 @@
       memlock:
         soft: -1
         hard: -1
+    {{ with .Volumes -}}
     volumes:
-      - {{ .Volume }}:/usr/share/elasticsearch/data
-    {{ with .PortMap -}}
+      {{ range $volume, $path := . -}}
+      - {{ $volume.Name }}:{{ $path }}
+      {{- end }}
+    {{- end }}
+    {{ with .Ports -}}
     ports:
       {{ range $port, $portC := . -}}
       - {{ $port }}:{{ $portC }}

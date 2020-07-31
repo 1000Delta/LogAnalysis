@@ -4,25 +4,7 @@ services:
   ######################## Elasticsearch 集群
 {{- template "ES" . -}}
   ######################## Kibana
-  kibana:
-    container_name: la-kibana
-    image: docker.elastic.co/kibana/kibana:7.8.0
-    ports:
-      - 5601:5601
-    environment:
-      # SERVER_HOST: 0.0.0.0
-      # SERVER_NAME: localhost
-      SERVER_BASEPATH: /kibana
-      ELASTICSEARCH_HOSTS: http://la-es01:9200
-      I18N_LOCALE: zh-CN # 开启中文界面
-    networks:
-      - LogAnalysis
-    labels:
-      - co.elastic.logs/module=kibana
-      - co.elastic.logs/fileset.stdout=access
-      - co.elastic.logs/fileset.stderr=error
-    depends_on:
-      - es01
+{{- /* template "Kibana" . */}}
   ######################## Logstash
   # logstash:
   #   container_name: la-logstash
@@ -64,6 +46,7 @@ services:
       - kibana
       # - logstash
 
+{{- /* TODO 数据卷解析输出 */}}
 volumes:
   data01:
     driver: local
