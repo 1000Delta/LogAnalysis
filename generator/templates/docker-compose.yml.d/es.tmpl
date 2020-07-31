@@ -1,0 +1,36 @@
+{{ define "ES" }}
+  {{ $cluster := . -}}
+  {{ range .Nodes -}}
+  {{ .Name }}:
+    container_name: {{ .Name }}
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    environment:
+      - node.name={{ .Name }}
+      {{ with $cluster.GetHosts .Name -}}
+      - discovery.seed_hosts={{ . }}
+      {{ else -}}
+      - discovery.type=single-node
+      {{ end -}}
+      - ES_JAVA_OPTS=-Xms{{ .HeapSize }}m -Xmx{{ .HeapSize }}m
+    env_file:
+      - ./env/es.env
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - {{ .Volume }}:/usr/share/elasticsearch/data
+    {{ with .PortMap -}}
+    ports:
+      {{ range $port, $portC := . -}}
+      - {{ $port }}:{{ $portC }}
+      {{- end }}
+    {{ end -}}
+    networks:
+      - LogAnalysis
+    labels:
+      - co.elastic.logs/module=elasticsearch
+      - co.elastic.logs/fileset.stdout=access
+      - co.elastic.logs/fileset.stderr=error
+  {{ end }}
+{{- end }}

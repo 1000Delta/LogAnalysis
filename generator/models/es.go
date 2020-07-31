@@ -66,4 +66,5 @@ type ESNode struct {
 	HeapSize int
 	// PortMap 表示端口映射，"19200:9200" -> 19200 => 9200
 	PortMap map[int]int
+	Volume string
 }
