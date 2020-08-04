@@ -25,6 +25,7 @@
     - [配置生成器](#配置生成器)
       - [模板空白符处理](#模板空白符处理)
       - [模板分文件处理](#模板分文件处理)
+      - [docker-compose.yml 内容解读](#docker-composeyml-内容解读)
 
 ## 技术架构
 
@@ -348,4 +349,41 @@ networks:
 
 #### 模板分文件处理
 
-对于不同部分的模板可以分开做处理，可以优化模板的格式
+对于不同部分的模板可以分开做处理，可以优化模板的格式，对不同内容的模板可以单独编辑，更加人性化。
+
+使用嵌套模板：`{{ template "tmpl" }}` 表示使用名称为 tmpl 的模板替换当前内容，一般使用 `{{- template "tmpl" -}}` 的形式忽略语句带来的换行效果
+
+嵌套模板的文件需要提前引入到模板对象中才能使用，否则会报错模板未定义
+
+20/08/01
+
+#### docker-compose.yml 内容解读
+
+一开始 docker-compose.yml 中的内容是根据 Elastic 官方教程来的，虽然绝大多是配置项都能够理解作用是什么，但是还是有少数配置不理解，担心在部署后会因此导致生产环境的问题，因此需要查询文档将配置文件彻底弄清楚。
+
+`ulimits`
+
+对应的是 `docker run` 时的参数 `--ulimit`，用于设置 Linux ulimit.
+
+Linux ulimit 对 shell 生成的进程的资源做限制，相关设置可以参照[这里](https://man.linuxde.net/ulimit)
+
+官方文档对这个参数的描述只有寥寥几句：[Set ulimits in container (--ulimit)](https://docs.docker.com/engine/reference/commandline/run/#set-ulimits-in-container---ulimit)
+
+对于配置中的 `type`，即配置项名称和含义没有在官方文档中列出来，参照 linux ulimit 的描述可以大概理解。
+
+> 实际上 `--ulimit` 参数的 type 使用的是 Linux /etc/security/limits.conf 配置文件中对于系统参数的缩略词，可以参考这篇博客： [linux limits.conf 文件重要参数描述](https://blog.csdn.net/u012085379/article/details/53390203)
+>
+> 其正好也提到了 ES 相关的配置。
+
+配置文件中 Elasticsearch 容器参数这几行：
+
+```yaml
+ulimits:
+  memlock:
+    soft: -1
+    hard: -1
+```
+
+- `memlock` 配置项表示最大锁定内存地址空间(kb)
+  - `soft` 表示 ulimit 的弹性限制，超过会发出警告
+  - `hard` 表示 ulimit 的硬限制，超过会报错
