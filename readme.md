@@ -1,4 +1,6 @@
-# LogAnalysis 日志分析系统
+# LogAnalysis 日志分析系统 
+
+![Travis Status](https://travis-ci.org/1000Delta/LogAnalysis.svg?branch=master)
 
 实现应用日志收集和分析功能
 
