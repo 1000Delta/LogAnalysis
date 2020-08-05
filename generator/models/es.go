@@ -5,23 +5,23 @@ import (
 	"strings"
 )
 
+// ES 相关参数
 const (
 	// ESDataPath 是 ES 数据路径
-	ESDataPath = "/usr/share/elasticsearch/data"
+	ESDataPath     = "/usr/share/elasticsearch/data"
+	ESDefaultImage = "docker.elastic.co/elasticsearch/elasticsearch:7.8.0"
 )
 
 // ESCluster 定义 ES 集群信息
 type ESCluster struct {
-	Container
+	Name  string
 	Nodes []*ESNode
 }
 
 // NewESCluster 创建集群对象
 func NewESCluster(name string) *ESCluster {
 	return &ESCluster{
-		Container: Container{
-			Name: name,
-		},
+		Name:  name,
 		Nodes: []*ESNode{},
 	}
 }
@@ -78,6 +78,7 @@ func NewESNode(name string, ports map[int]int, heapSize int, isMaster bool, data
 	return &ESNode{
 		Container: Container{
 			Name:  name,
+			Image: ESDefaultImage,
 			Ports: ports,
 			Volumes: map[*Volume]string{
 				NewVolume(dataVolume, VolumeDriverLocal): ESDataPath,

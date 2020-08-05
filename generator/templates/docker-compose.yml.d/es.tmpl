@@ -3,7 +3,7 @@
   {{ range .Nodes -}}
   {{ .Name }}:
     container_name: {{ .Name }}
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.8.0
+    image: {{ .Image }}
     environment:
       - node.name={{ .Name }}
       {{ with $cluster.GetHosts .Name -}}

@@ -3,6 +3,7 @@ package models
 // Container 表示 Docker 容器信息
 type Container struct {
 	Name string
+	Image string
 	// Ports 表示端口映射，"19200:9200" -> 19200 => 9200
 	Ports map[int]int
 	// Volumes 表示数据卷绑定，
