@@ -2,3 +2,10 @@ language: golang
 
 go:
   - "1.13"
+
+branches:
+  only:
+    - master
+    - /^develop.*$/
+
+script: ./test.sh
