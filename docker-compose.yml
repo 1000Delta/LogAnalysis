@@ -106,12 +106,15 @@ services:
     volumes:
       - ./filebeat/filebeat.docker.yml:/usr/share/filebeat/filebeat.yml:ro
       - ./filebeat/modules.d:/usr/share/filebeat/modules.d:ro
+      # ingest pipeline 配置文件
+      - ./filebeat/module/nginx/access/ingest:/usr/share/filebeat/module/nginx/access/ingest
+      - ./filebeat/module/nginx/error/ingest:/usr/share/filebeat/module/nginx/error/ingest
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /1000delta/logs:/logs/nginx:ro
     environment:
       MONITORING_ELASTICSEARCH_HOSTS: http://la-es01:9200
-      ELASTICSEARCH_HOSTS: la-es01:9200
+      ELASTICSEARCH_HOSTS: "[la-es01:9200, la-es02:9200, la-es03:9200]"
       # LOGSTASH_HOSTS: la-logstash:5044
       KIBANA_HOST: la-kibana:5601
     networks:

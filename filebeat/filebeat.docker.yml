@@ -11,29 +11,6 @@ filebeat.autodiscover:
 processors:
   - add_cloud_metadata: ~
 
-filebeat.inputs:
-  - type: log
-    paths:
-      - /logs/nginx/*/access.log
-    # fields:
-    #   website: wsl.dev
-    #   event.module: nginx
-    # fields_under_root: true
-    pipeline: nginx-access-log
-    index: nginx-access-%{+yyyy.MM.dd}
-  - type: log
-    paths:
-      - /logs/nginx/*/error.log
-    #     fields:
-    #       website: wsl.dev
-    #       event.module: nginx
-    #     fields_under_root: true
-    multiline.pattern: '^\d{4}\/\d{2}\/\d{2}'
-    multiline.negate: true
-    multiline.match: after
-    pipeline: nginx-error-log
-    index: nginx-error-%{+yyyy.MM.dd}
-
 output.elasticsearch:
   hosts: "${ELASTICSEARCH_HOSTS:elasticsearch:9200}"
   username: "${ELASTICSEARCH_USERNAME:}"
@@ -51,3 +28,4 @@ monitoring:
   # cluster_uuid: PRODUCTION_ES_CLUSTER_UUID
   elasticsearch:
     hosts: "${MONITORING_ELASTICSEARCH_HOSTS:elasticsearch:9200}"
+    loadbalance: true
