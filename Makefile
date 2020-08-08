@@ -24,9 +24,9 @@ edit:
 	sudo chmod 775 -R filebeat/*
 
 # 加载配置
-.PHONY: configure
-configure:
-	cd $(PIPELINELOADER_DIR) && ./pipelineloader
+# .PHONY: configure
+# configure:
+# 	cd $(PIPELINELOADER_DIR) && ./pipelineloader
 
 # 重新加载配置
 .PHONY: reconfigure
