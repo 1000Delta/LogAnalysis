@@ -13,19 +13,23 @@ processors:
 
 output.elasticsearch:
   hosts: "${ELASTICSEARCH_HOSTS:elasticsearch:9200}"
-  username: "${ELASTICSEARCH_USERNAME:}"
-  password: "${ELASTICSEARCH_PASSWORD:}"
+  loadbalance: true
+  username: filebeat_publisher
+  password: "${PUBLISHER_PWD:}"
 
 # output.logstash:
 #   hosts: "${LOGSTASH_HOSTS:logstash:5044}"
 
-setup.kibana:
-  host: "${KIBANA_HOST:kibana:5601}"
-#  path: /kibana
+setup:
+  ilm.check_exists: false
+  kibana:
+    host: "${KIBANA_HOST:kibana:5601}"
+#   path: /kibana
 
 monitoring:
   enabled: true
   # cluster_uuid: PRODUCTION_ES_CLUSTER_UUID
   elasticsearch:
     hosts: "${MONITORING_ELASTICSEARCH_HOSTS:elasticsearch:9200}"
-    loadbalance: true
+    username: beats_system
+    password: ${SYSTEM_PWD:}

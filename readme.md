@@ -1,4 +1,4 @@
-# LogAnalysis 日志分析系统 
+# LogAnalysis 日志分析系统
 
 ![Travis Status](https://travis-ci.org/1000Delta/LogAnalysis.svg?branch=master)
 
@@ -12,6 +12,14 @@
   - [系统配置](#系统配置)
     - [禁用交换空间](#禁用交换空间)
     - [增加虚拟内存区域数量](#增加虚拟内存区域数量)
+  - [部署配置](#部署配置)
+    - [指定日志目录](#指定日志目录)
+    - [X-PACK 配置](#x-pack-配置)
+      - [ES 证书生成](#es-证书生成)
+      - [创建/启动集群](#创建启动集群)
+      - [配置 ES 集群内建用户密码](#配置-es-集群内建用户密码)
+      - [配置 Kibana 连接 ES 密码](#配置-kibana-连接-es-密码)
+      - [配置 filebeat 密码](#配置-filebeat-密码)
   - [开发记录](#开发记录)
     - [配置 ELK 集群](#配置-elk-集群)
     - [收集服务日志](#收集服务日志)
@@ -21,6 +29,7 @@
       - [方案 2](#方案-2)
     - [ES pipeline 加载器](#es-pipeline-加载器)
     - [添加 pipeline processor 自动添加域名字段](#添加-pipeline-processor-自动添加域名字段)
+      - [filebeat 自动加载自定义 pipeline](#filebeat-自动加载自定义-pipeline)
       - [pipeline 解析日志报错](#pipeline-解析日志报错)
     - [多行日志处理问题](#多行日志处理问题)
     - [部署问题](#部署问题)
@@ -29,6 +38,12 @@
       - [模板分文件处理](#模板分文件处理)
       - [docker-compose.yml 内容解读](#docker-composeyml-内容解读)
       - [配置生成存在的一些问题](#配置生成存在的一些问题)
+  - [Kibana 配置](#kibana-配置)
+    - [Elastic 安全问题](#elastic-安全问题)
+      - [项目实际配置](#项目实际配置)
+        - [kibana 安全性](#kibana-安全性)
+        - [filebeat 安全性](#filebeat-安全性)
+    - [Kibana 面板开发](#kibana-面板开发)
 
 ## 技术架构
 
@@ -64,6 +79,62 @@ sudo swapoff -a
 ### 增加虚拟内存区域数量
 
 `vm.max_map_count`: [elasticSearch Docker 启动报错：max virtual memory areas vm.max_map_count [65530] is too low, increase to at least [262144]](http://www.fecmall.com/topic/1172)
+
+## 部署配置
+
+### 指定日志目录
+
+在 [`docker-compose.yml`](./docker-compose.yml) 中，对 filebeat 的 volume 配置项，把 `/1000delta/logs` 替换成部署机器的日志集合目录。二级目录将被识别为域名。
+
+### X-PACK 配置
+
+#### ES 证书生成
+
+**部署集群之前**需要生成 ES 证书，执行：
+
+```bash
+make configure
+```
+
+将会创建临时 ES 容器生成证书，用于部署时映射到集群中。
+
+#### 创建/启动集群
+
+```bash
+make run
+```
+
+启动 ELKB 集群。
+
+#### 配置 ES 集群内建用户密码
+
+只能执行一次，在**集群启动后**执行
+
+```bash
+make pass-es
+```
+
+#### 配置 Kibana 连接 ES 密码
+
+输入配置 ES 时 `kibana_system` 的密码：
+
+```bash
+make pass-kibana
+```
+
+#### 配置 filebeat 密码
+
+有两个密码，包括 ES 监控和推送日志到 ES。
+
+ES 监控使用内建用户 `beats_system`，推送日志需要在 Kibana > Stack Management > 角色/用户 中配置角色和用户 `filebeat_publisher` 然后使用。
+
+[具体操作](#filebeat-安全性)
+
+记录密码命令：
+
+```bash
+make pass-filebeat
+```
 
 ## 开发记录
 
@@ -281,6 +352,18 @@ NGINX_ERRORLOG %{NGINXERROR_DATE:timestamp} \[%{WORD:level}\] %{POSINT:pid}#%{NU
 
 实际上就是对最后一部分 `%{GREEDYMULTILINE:message}` 做了扩展，将报错信息进行了详细划分。
 
+#### filebeat 自动加载自定义 pipeline
+
+20/08/08
+
+考虑到配置通过工具加载到 ES 中会导致先启动的 filebeat 传输数据无法被指定的 pipeline 解析，我查找了一下资料，发现都是通过手动加载，没有很好的自动加载的方式。
+
+我通过 `docker cp` 导出 filebeat Docker 容器配置文件目录 `/usr/share/fielbeat` 后发现，其 `module/nginx/access/ingest` 和 `module/nginx/error/ingest` 分别存储了其加载到 ES 中的 pipeline 的配置，那么我们直接把这两个文件映射成我们需要的配置然后使用 `nginx` module 可不可以呢？
+
+> 经过分析，在 `module/nginx` 文件夹中，配置对应的就是在 `filebeat.yml` 中写的配置，比如我自己对于 Nginx error 多行日志的处理，使用了 `multiline` 参数等，在 `module/nginx/error/config/nginx-error.yml` 中几乎一模一样，唯独对于多文件路径使用了 go template 进行遍历替换到配置文件中。
+
+测试之后确认，可以通过替换 `pipeline.yml` 来使用自动加载，并且使用 nginx module 收集日志。
+
 20/07/28
 
 进行测试发现报错：`Provided Grok expressions do not match field value: [/logs/nginx/wsl.dev/error.log]`，说明编写的模式有问题
@@ -399,3 +482,39 @@ ulimits:
 2. 对于已经存在的配置，我如何对其中的部分属性做修改？比如我要调整 Kibana 的 basepath，但是我不希望修改其他的定制配置。
 
 对于第二点可以考虑添加一个本地存储来实现，比如 一个 json/yaml/toml 等，每次启动 CLI 时加载，修改之后写入。 // TODO 定制配置缓存
+
+## Kibana 配置
+
+### Elastic 安全问题
+
+Kibana 面板部署到服务器上对于公网是处于开放状态，如果限制 ip 访问控制效果太强，而且不灵活，优先考虑使用 Elastic 官方提供的安全措施。
+
+配置安全性需要启用 xpack，然后要启用 TLS 认证，因此需要通过 es 生成证书，具体命令可以参考 [Encrypting communications in Elasticsearchedit](https://www.elastic.co/guide/en/elasticsearch/reference/current/configuring-tls.html)
+
+使用证书启动 es 集群之后，需要配置内建用户的密码，用于管理集群和 ES 与 Kibana 之间的通信还有 Beats 的监控。
+
+用户和角色管理：
+
+1. 对于 filebeat 推送数据的角色，需要到 Kibana 的角色管理中设置，相关参数在 [Create a publishing user](https://www.elastic.co/guide/en/beats/filebeat/7.8/privileges-to-publish-events.html) 中。
+2. 将角色的权限赋予 filebeat 使用的用户，你需要创建一个用户，然后赋予权限。
+
+设置密码可以使用 keystore 来交互式设置，而不用硬编码到配置文件中。
+
+- [Kibana](https://www.elastic.co/guide/en/kibana/current/secure-settings.html)
+- [filebeat](https://www.elastic.co/guide/en/beats/filebeat/7.8/keystore.html)
+
+#### 项目实际配置
+
+##### kibana 安全性
+
+使用内建用户 `kibana_system`，已经硬编码到配置中。
+
+密码通过 make 命令 `pass-kibana` 来设置，调用 keystore 设置 `elasticsearch.password` 配置项。
+
+##### filebeat 安全性
+
+用户名称已经硬编码到配置文件中，为 `filebeat_publisher`。
+
+需要在 Kibana 面板创建一个具有文档 [Create a publishing user](https://www.elastic.co/guide/en/beats/filebeat/7.8/privileges-to-publish-events.html) 中权限的角色，然后创建用户 `filebeat_publisher` 并赋予角色，密码通过 make 命令 `pass-filebeat` 使用 keystore 来添加。
+
+### Kibana 面板开发
