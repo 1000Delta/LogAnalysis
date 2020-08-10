@@ -9,7 +9,7 @@
     # Set custom paths for the log files. If left empty,
     # Filebeat will choose the paths depending on your OS.
     var.paths:
-      - /logs/nginx/*/access.log
+      - /logs/nginx/*/access.log*
 
   # Error logs
   error:
@@ -18,7 +18,7 @@
     # Set custom paths for the log files. If left empty,
     # Filebeat will choose the paths depending on your OS.
     var.paths:
-      - /logs/nginx/*/error.log
+      - /logs/nginx/*/error.log*
 
   # Ingress-nginx controller logs. This is disabled by default. It could be used in Kubernetes environments to parse ingress-nginx logs
   ingress_controller:
