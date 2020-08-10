@@ -21,7 +21,7 @@ run: build configure
 # 编辑状态，修改部分文件权限
 .PHONY: edit
 edit:
-	sudo chmod 775 -R filebeat/*
+	sudo chown $UID:$GID -R filebeat/*
 
 # 配置集群参数
 .PHONY: configure
@@ -58,7 +58,7 @@ kibana: kibana/config/kibana.yml
 
 .PHONY: filebeat
 filebeat: filebeat/*
-	sudo chmod 755 -R filebeat/*
+	sudo chown root:root -R filebeat/*
 	docker-compose restart filebeat 
 
 # 重新加载配置
