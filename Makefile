@@ -38,7 +38,7 @@ cert/elastic-certificates.p12:
 # 配置集群密码
 .PHONY: pass-es
 pass-es:
-	docker-compose es01 elasticsearch-setup-passwords interactive
+	docker-compose exec es01 elasticsearch-setup-passwords interactive
 
 .PHONY: pass-filebeat
 pass-filebeat:
